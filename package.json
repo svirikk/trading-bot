@@ -1,0 +1,29 @@
+{
+  "name": "bybit-futures-trading-bot",
+  "version": "1.0.0",
+  "description": "Automated trading bot for Bybit Futures that reads signals from Telegram",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js",
+    "balance": "node scripts/check-balance.js",
+    "positions": "node scripts/check-positions.js"
+  },
+  "keywords": [
+    "bybit",
+    "trading",
+    "bot",
+    "futures",
+    "telegram"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bybit-api": "^3.6.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.7",
+    "winston": "^3.15.0"
+  }
+}
