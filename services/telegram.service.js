@@ -15,18 +15,19 @@ class TelegramService {
    * Налаштовує обробник повідомлень
    */
   setupMessageHandler() {
-    this.bot.on('message', (msg) => {
-      // Обробляємо тільки повідомлення з каналу
+    // Слухаємо повідомлення З КАНАЛУ (а не з приватного чату)
+    this.bot.on('channel_post', (msg) => {
+      // Перевіряємо що це наш канал
       if (msg.chat.id.toString() === this.channelId.toString()) {
         this.handleChannelMessage(msg);
       }
     });
-
+  
     this.bot.on('polling_error', (error) => {
       logger.error(`[TELEGRAM] Polling error: ${error.message}`);
     });
-
-    logger.info('[TELEGRAM] ✅ Bot initialized and listening for messages');
+  
+    logger.info('[TELEGRAM] ✅ Bot initialized and listening for channel posts');
   }
 
   /**
