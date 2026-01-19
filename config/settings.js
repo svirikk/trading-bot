@@ -22,6 +22,8 @@ export const config = {
     apiKey: process.env.BYBIT_API_KEY,
     apiSecret: process.env.BYBIT_API_SECRET,
     testnet: process.env.BYBIT_TESTNET === 'true',
+    // ONE_WAY (positionIdx=0) або HEDGE (LONG idx=1, SHORT idx=2)
+    positionMode: (process.env.BYBIT_POSITION_MODE || 'ONE_WAY').toUpperCase(),
     baseURL: process.env.BYBIT_TESTNET === 'true' 
       ? 'https://api-testnet.bybit.com'
       : 'https://api.bybit.com'
