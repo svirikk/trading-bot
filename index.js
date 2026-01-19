@@ -303,10 +303,12 @@ async function openPosition(signal) {
 
     // 2. Відкриваємо Market ордер
     const side = direction === 'LONG' ? 'Buy' : 'Sell';
+    const positionIdx = bybitService.getPositionIdx(direction);
     const orderResult = await bybitService.openMarketOrder(
       symbol,
       side,
-      positionParams.quantity
+      positionParams.quantity,
+      positionIdx
     );
 
     // 3. Встановлюємо Take Profit
@@ -314,7 +316,8 @@ async function openPosition(signal) {
       symbol,
       side,
       positionParams.takeProfit,
-      positionParams.quantity
+      positionParams.quantity,
+      positionIdx
     );
 
     // 4. Встановлюємо Stop Loss
@@ -322,7 +325,8 @@ async function openPosition(signal) {
       symbol,
       side,
       positionParams.stopLoss,
-      positionParams.quantity
+      positionParams.quantity,
+      positionIdx
     );
 
     // 5. Додаємо позицію до моніторингу
