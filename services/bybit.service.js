@@ -14,6 +14,19 @@ class BybitService {
   }
 
   /**
+   * Повертає positionIdx в залежності від режиму позицій акаунта.
+   * ONE_WAY: 0
+   * HEDGE: LONG=1, SHORT=2
+   */
+  getPositionIdx(direction) {
+    const mode = (config.bybit.positionMode || 'ONE_WAY').toUpperCase();
+    if (mode === 'HEDGE') {
+      return direction === 'LONG' ? 1 : 2;
+    }
+    return 0;
+  }
+
+  /**
    * Перевіряє з'єднання з API
    */
   async connect() {
@@ -135,22 +148,33 @@ class BybitService {
    */
   async setLeverage(symbol, leverage) {
     try {
-      logger.info(`[BYBIT] Setting leverage ${leverage}x for ${symbol}...`);
-      
       const response = await this.client.setLeverage({
         category: 'linear',
         symbol: symbol,
         buyLeverage: leverage.toString(),
         sellLeverage: leverage.toString()
       });
-
+  
+      // Перевіряємо чи плече вже встановлене
+      if (response.retMsg === 'leverage not modified' || response.retCode === 110043) {
+        logger.info(`[BYBIT] Leverage already set to ${leverage}x for ${symbol}`);
+        return true;
+      }
+  
       if (response.retCode !== 0) {
         throw new Error(`Failed to set leverage: ${response.retMsg}`);
       }
-
+  
       logger.info(`[BYBIT] ✅ Leverage ${leverage}x set for ${symbol}`);
       return true;
     } catch (error) {
+      // Якщо помилка "leverage not modified" - це OK
+      if (error.message.includes('leverage not modified') || 
+          error.message.includes('110043')) {
+        logger.info(`[BYBIT] Leverage already set to ${leverage}x for ${symbol}`);
+        return true;
+      }
+      
       logger.error(`[BYBIT] Error setting leverage: ${error.message}`);
       throw error;
     }
@@ -159,7 +183,7 @@ class BybitService {
   /**
    * Відкриває Market ордер
    */
-  async openMarketOrder(symbol, side, quantity) {
+  async openMarketOrder(symbol, side, quantity, positionIdx = 0) {
     try {
       logger.info(`[BYBIT] Opening ${side} market order: ${quantity} ${symbol}...`);
       
@@ -169,7 +193,7 @@ class BybitService {
         side: side, // 'Buy' або 'Sell'
         orderType: 'Market',
         qty: quantity.toString(),
-        positionIdx: 0 // 0: one-way mode, 1: hedge-mode (Buy), 2: hedge-mode (Sell)
+        positionIdx: positionIdx // 0: one-way mode, 1: hedge-mode (LONG), 2: hedge-mode (SHORT)
       });
 
       if (response.retCode !== 0) {
@@ -195,34 +219,29 @@ class BybitService {
   /**
    * Встановлює Take Profit ордер
    */
-  async setTakeProfit(symbol, side, takeProfitPrice, quantity) {
+  async setTakeProfit(symbol, side, takeProfitPrice, quantity, positionIdx = 0) {
     try {
-      // Для TP: якщо позиція LONG, то TP = Sell, якщо SHORT, то TP = Buy
-      const tpSide = side === 'Buy' ? 'Sell' : 'Buy';
-      
-      logger.info(`[BYBIT] Setting Take Profit: ${tpSide} @ ${takeProfitPrice} for ${symbol}...`);
-      
-      const response = await this.client.submitOrder({
+      // Рекомендований шлях для V5: встановлювати TP/SL через setTradingStop
+      if (typeof this.client.setTradingStop !== 'function') {
+        throw new Error('Bybit client does not support setTradingStop (upgrade bybit-api package)');
+      }
+
+      logger.info(`[BYBIT] Setting Take Profit via setTradingStop: @ ${takeProfitPrice} for ${symbol}...`);
+
+      const response = await this.client.setTradingStop({
         category: 'linear',
-        symbol: symbol,
-        side: tpSide,
-        orderType: 'Limit',
-        qty: quantity.toString(),
-        price: takeProfitPrice.toString(),
-        positionIdx: 0,
-        reduceOnly: true, // Важливо: це закриває позицію
-        timeInForce: 'GTC' // Good Till Cancel
+        symbol,
+        positionIdx,
+        takeProfit: takeProfitPrice.toString(),
+        tpTriggerBy: 'LastPrice'
       });
 
       if (response.retCode !== 0) {
         throw new Error(`Failed to set Take Profit: ${response.retMsg}`);
       }
 
-      const orderId = response.result?.orderId;
-      logger.info(`[BYBIT] ✅ Take Profit set: Order ID ${orderId} @ ${takeProfitPrice}`);
-      
       return {
-        orderId: orderId,
+        orderId: response.result?.orderId || 'TP_SET_TRADING_STOP',
         price: takeProfitPrice
       };
     } catch (error) {
@@ -234,35 +253,29 @@ class BybitService {
   /**
    * Встановлює Stop Loss ордер
    */
-  async setStopLoss(symbol, side, stopLossPrice, quantity) {
+  async setStopLoss(symbol, side, stopLossPrice, quantity, positionIdx = 0) {
     try {
-      // Для SL: якщо позиція LONG, то SL = Sell, якщо SHORT, то SL = Buy
-      const slSide = side === 'Buy' ? 'Sell' : 'Buy';
-      
-      logger.info(`[BYBIT] Setting Stop Loss: ${slSide} @ ${stopLossPrice} for ${symbol}...`);
-      
-      // Використовуємо StopMarket для негайного виконання при досягненні stopPrice
-      const response = await this.client.submitOrder({
+      // Рекомендований шлях для V5: встановлювати TP/SL через setTradingStop
+      if (typeof this.client.setTradingStop !== 'function') {
+        throw new Error('Bybit client does not support setTradingStop (upgrade bybit-api package)');
+      }
+
+      logger.info(`[BYBIT] Setting Stop Loss via setTradingStop: @ ${stopLossPrice} for ${symbol}...`);
+
+      const response = await this.client.setTradingStop({
         category: 'linear',
-        symbol: symbol,
-        side: slSide,
-        orderType: 'StopMarket',
-        qty: quantity.toString(),
-        stopPrice: stopLossPrice.toString(),
-        positionIdx: 0,
-        reduceOnly: true, // Важливо: це закриває позицію
-        timeInForce: 'GTC'
+        symbol,
+        positionIdx,
+        stopLoss: stopLossPrice.toString(),
+        slTriggerBy: 'LastPrice'
       });
 
       if (response.retCode !== 0) {
         throw new Error(`Failed to set Stop Loss: ${response.retMsg}`);
       }
 
-      const orderId = response.result?.orderId;
-      logger.info(`[BYBIT] ✅ Stop Loss set: Order ID ${orderId} @ ${stopLossPrice}`);
-      
       return {
-        orderId: orderId,
+        orderId: response.result?.orderId || 'SL_SET_TRADING_STOP',
         price: stopLossPrice
       };
     } catch (error) {
