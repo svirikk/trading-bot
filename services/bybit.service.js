@@ -148,6 +148,8 @@ class BybitService {
    */
   async setLeverage(symbol, leverage) {
     try {
+      logger.info(`[BYBIT] Setting leverage ${leverage}x for ${symbol}...`);
+      
       const response = await this.client.setLeverage({
         category: 'linear',
         symbol: symbol,
@@ -155,26 +157,27 @@ class BybitService {
         sellLeverage: leverage.toString()
       });
   
-      // Перевіряємо чи плече вже встановлене
-      if (response.retMsg === 'leverage not modified' || response.retCode === 110043) {
-        logger.info(`[BYBIT] Leverage already set to ${leverage}x for ${symbol}`);
+      // Успіх або плече вже встановлене - обидва OK
+      if (response.retCode === 0 || 
+          response.retCode === 110043 ||
+          response.retMsg?.includes('leverage not modified')) {
+        logger.info(`[BYBIT] ✅ Leverage ${leverage}x set for ${symbol}`);
         return true;
       }
   
-      if (response.retCode !== 0) {
-        throw new Error(`Failed to set leverage: ${response.retMsg}`);
-      }
-  
-      logger.info(`[BYBIT] ✅ Leverage ${leverage}x set for ${symbol}`);
-      return true;
+      // Інша помилка - кидаємо
+      throw new Error(`Failed to set leverage: ${response.retMsg} (code: ${response.retCode})`);
+      
     } catch (error) {
-      // Якщо помилка "leverage not modified" - це OK
-      if (error.message.includes('leverage not modified') || 
-          error.message.includes('110043')) {
-        logger.info(`[BYBIT] Leverage already set to ${leverage}x for ${symbol}`);
+      // Якщо це "leverage not modified" - ігноруємо
+      if (error.message?.includes('leverage not modified') ||
+          error.message?.includes('110043') ||
+          error.code === 110043) {
+        logger.info(`[BYBIT] ✅ Leverage already ${leverage}x for ${symbol}`);
         return true;
       }
       
+      // Справжня помилка - кидаємо далі
       logger.error(`[BYBIT] Error setting leverage: ${error.message}`);
       throw error;
     }
