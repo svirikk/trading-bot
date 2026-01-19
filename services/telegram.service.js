@@ -2,6 +2,35 @@ import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../config/settings.js';
 import logger from '../utils/logger.js';
 
+/**
+ * Нормалізує напрямок угоди на основі типу сигналу.
+ *
+ * Логіка:
+ * - LONG FLUSH      → завжди LONG (Buy)
+ * - SHORT SQUEEZE   → завжди SHORT (Sell)
+ * - Інші типи       → використовуємо те, що прийшло в direction (LONG/SHORT)
+ */
+function normalizeDirection(rawDirection, rawSignalType) {
+  const direction = (rawDirection || '').toUpperCase();
+  const signalType = (rawSignalType || '').toUpperCase().replace(/\s+/g, '_');
+
+  if (signalType === 'LONG_FLUSH') {
+    return 'LONG';
+  }
+
+  if (signalType === 'SHORT_SQUEEZE') {
+    return 'SHORT';
+  }
+
+  // За замовчуванням довіряємо direction, якщо він валідний
+  if (direction === 'LONG' || direction === 'SHORT') {
+    return direction;
+  }
+
+  // Якщо нічого валідного немає - повертаємо LONG як дефолт (далі все одно буде валідація)
+  return 'LONG';
+}
+
 class TelegramService {
   constructor() {
     this.bot = new TelegramBot(config.telegram.botToken, { polling: true });
@@ -93,10 +122,20 @@ class TelegramService {
           return this.parseSignalFromHTML(text);
         }
         
+        const rawSignalType = signalData.signalType || 'UNKNOWN';
+        const normalizedSignalType = rawSignalType
+          ? rawSignalType.toString().toUpperCase().replace(/\s+/g, '_')
+          : 'UNKNOWN';
+
+        const normalizedDir = normalizeDirection(
+          signalData.direction,
+          normalizedSignalType
+        );
+
         return {
           symbol: signalData.symbol.toUpperCase(),
-          direction: signalData.direction.toUpperCase(),
-          signalType: signalData.signalType || 'UNKNOWN',
+          direction: normalizedDir,
+          signalType: normalizedSignalType,
           timestamp: signalData.timestamp || Date.now(),
           stats: signalData.stats || {}
         };
@@ -119,6 +158,10 @@ class TelegramService {
       const symbolMatch = text.match(/<b>Symbol:<\/b>\s*(\w+)/i) || 
                          text.match(/Symbol:\s*(\w+)/i);
       
+      // Парсимо Type (LONG FLUSH / SHORT SQUEEZE)
+      const typeMatch = text.match(/<b>Type:<\/b>\s*([A-Z\s_]+)/i) ||
+                       text.match(/Type:\s*([A-Z\s_]+)/i);
+
       // Парсимо Direction
       const directionMatch = text.match(/<b>Direction:<\/b>\s*(LONG|SHORT)/i) ||
                             text.match(/Direction:\s*(LONG|SHORT)/i);
@@ -127,10 +170,20 @@ class TelegramService {
         return null;
       }
       
+      const rawSignalType = typeMatch ? typeMatch[1] : 'UNKNOWN';
+      const normalizedSignalType = rawSignalType
+        ? rawSignalType.toString().toUpperCase().replace(/\s+/g, '_')
+        : 'UNKNOWN';
+
+      const normalizedDir = normalizeDirection(
+        directionMatch[1],
+        normalizedSignalType
+      );
+
       return {
         symbol: symbolMatch[1].toUpperCase(),
-        direction: directionMatch[1].toUpperCase(),
-        signalType: 'UNKNOWN',
+        direction: normalizedDir,
+        signalType: normalizedSignalType,
         timestamp: Date.now(),
         stats: {}
       };
