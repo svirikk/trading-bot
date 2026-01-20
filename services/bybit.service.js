@@ -298,14 +298,17 @@ class BybitService {
       
       if (symbol) {
         params.symbol = symbol;
+      } else {
+        // ✅ Якщо symbol не вказано, додаємо settleCoin
+        params.settleCoin = 'USDT';
       }
-
+  
       const response = await this.client.getPositionInfo(params);
-
+  
       if (response.retCode !== 0) {
         throw new Error(`Failed to get positions: ${response.retMsg}`);
       }
-
+  
       const positions = (response.result?.list || [])
         .filter(pos => parseFloat(pos.size || '0') !== 0)
         .map(pos => ({
@@ -317,7 +320,7 @@ class BybitService {
           unrealisedPnl: parseFloat(pos.unrealisedPnl || '0'),
           leverage: parseFloat(pos.leverage || '1')
         }));
-
+  
       return positions;
     } catch (error) {
       logger.error(`[BYBIT] Error getting open positions: ${error.message}`);

@@ -121,24 +121,28 @@ class PositionService {
       if (this.openPositions.size === 0) {
         return;
       }
-
-      // Отримуємо актуальні позиції з біржі
-      const exchangePositions = await bybitService.getOpenPositions();
-      
-      // Перевіряємо кожну відстежувану позицію
+  
+      // ✅ Перевіряємо КОЖЕН символ окремо (надійніше)
       for (const [symbol, trackedPosition] of this.openPositions.entries()) {
-        const exchangePosition = exchangePositions.find(pos => pos.symbol === symbol);
-        
-        if (!exchangePosition || parseFloat(exchangePosition.size) === 0) {
-          // Позиція закрита на біржі
-          await this.handlePositionClosed(symbol, trackedPosition);
-        } else {
-          // Позиція все ще відкрита, оновлюємо дані
-          await this.updatePositionData(symbol, exchangePosition);
+        try {
+          const exchangePositions = await bybitService.getOpenPositions(symbol);
+          const exchangePosition = exchangePositions.find(pos => pos.symbol === symbol);
+          
+          if (!exchangePosition || parseFloat(exchangePosition.size) === 0) {
+            // Позиція закрита на біржі
+            await this.handlePositionClosed(symbol, trackedPosition);
+          } else {
+            // Позиція все ще відкрита, оновлюємо дані
+            await this.updatePositionData(symbol, exchangePosition);
+          }
+        } catch (error) {
+          logger.error(`[POSITION] Error checking position ${symbol}: ${error.message}`);
+          // Продовжуємо перевірку інших позицій
+          continue;
         }
       }
     } catch (error) {
-      logger.error(`[POSITION] Error checking positions: ${error.message}`);
+      logger.error(`[POSITION] Error in checkPositions: ${error.message}`);
     }
   }
 

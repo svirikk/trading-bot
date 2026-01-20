@@ -222,7 +222,20 @@ class TelegramService {
    * Форматує повідомлення про відкриття позиції
    */
   formatPositionOpenedMessage(positionData) {
-    const { symbol, direction, entryPrice, quantity, leverage, takeProfit, stopLoss, riskAmount } = positionData;
+    const { 
+      symbol, 
+      direction, 
+      entryPrice, 
+      quantity, 
+      leverage, 
+      takeProfit, 
+      stopLoss, 
+      riskAmount,
+      balance  // ✅ Додай balance тут!
+    } = positionData;
+    
+    // ✅ Безпечна обробка symbol
+    const cleanSymbol = symbol ? symbol.replace('USDT', '') : 'UNKNOWN';
     
     const directionEmoji = direction === 'LONG' ? '📈' : '📉';
     const tpPercent = direction === 'LONG' 
@@ -232,19 +245,24 @@ class TelegramService {
       ? (((entryPrice - stopLoss) / entryPrice) * 100).toFixed(2)
       : (((stopLoss - entryPrice) / entryPrice) * 100).toFixed(2);
     
+    // ✅ Безпечна обробка balance
+    const balancePercent = balance && riskAmount 
+      ? (riskAmount / balance * 100).toFixed(2)
+      : '0.00';
+    
     return `✅ <b>POSITION OPENED</b>
-
-<b>Symbol:</b> ${symbol}
-<b>Direction:</b> ${directionEmoji} ${direction}
-<b>Entry Price:</b> $${entryPrice}
-<b>Quantity:</b> ${quantity.toLocaleString()} ${symbol.replace('USDT', '')}
-<b>Leverage:</b> ${leverage}x
-
-🎯 <b>Take Profit:</b> $${takeProfit} (+${tpPercent}%)
-🛑 <b>Stop Loss:</b> $${stopLoss} (-${slPercent}%)
-💰 <b>Risk:</b> $${riskAmount.toFixed(2)} (${(riskAmount / positionData.balance * 100).toFixed(2)}% of balance)
-
-Signal from: ${new Date(positionData.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
+  
+  <b>Symbol:</b> ${symbol}
+  <b>Direction:</b> ${directionEmoji} ${direction}
+  <b>Entry Price:</b> $${entryPrice}
+  <b>Quantity:</b> ${quantity.toLocaleString()} ${cleanSymbol}
+  <b>Leverage:</b> ${leverage}x
+  
+  🎯 <b>Take Profit:</b> $${takeProfit} (+${tpPercent}%)
+  🛑 <b>Stop Loss:</b> $${stopLoss} (-${slPercent}%)
+  💰 <b>Risk:</b> $${riskAmount.toFixed(2)} (${balancePercent}% of balance)
+  
+  Signal from: ${new Date(positionData.timestamp).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
   }
 
   /**
